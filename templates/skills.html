@@ -1,0 +1,390 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Skills to Jobs | CareerPath AI</title>
+    <link
+      rel="stylesheet"
+      href="{{ url_for('static', filename='css/styles.css') }}"
+    />
+  </head>
+
+  <body>
+    <div class="page-wrapper">
+      <!-- Navbar -->
+      <nav class="navbar">
+        <h1 class="logo">CareerPath AI</h1>
+        <ul class="nav-links">
+          <li>
+            <a
+              href="{{ url_for('index') }}"
+              class="{{ 'active' if request.endpoint == 'index' else '' }}"
+            >
+              Home
+            </a>
+          </li>
+
+          <li>
+            <a
+              href="{{ url_for('jobs') }}"
+              class="{{ 'active' if request.endpoint == 'jobs' else '' }}"
+            >
+              Find Skills
+            </a>
+          </li>
+
+          <li>
+            <a
+              href="{{ url_for('skills') }}"
+              class="{{ 'active' if request.endpoint == 'skills' else '' }}"
+            >
+              Find Jobs
+            </a>
+          </li>
+
+          <li>
+            <a
+              href="{{ url_for('about') }}"
+              class="{{ 'active' if request.endpoint == 'about' else '' }}"
+            >
+              About
+            </a>
+          </li>
+        </ul>
+
+        <div class="nav-buttons">
+          <a href="{{ url_for('dashboard') }}" class="sign-btn">Dashboard</a>
+          {% if current_user.is_authenticated %}
+          <a href="{{ url_for('logout') }}" class="sign-btn">Logout</a>
+          {% else %}
+          <a href="{{ url_for('login') }}" class="sign-btn">Login / Sign Up</a>
+          {% endif %}
+        </div>
+      </nav>
+
+      <div class="main-content">
+        <!-- Header -->
+        <section class="page-header">
+          <h2>Find Jobs Based on Your Skills</h2>
+          <p>Enter your skills to discover matching job roles.</p>
+        </section>
+
+        <!-- Progress Bar -->
+        <div id="progress-bar-container">
+          <div id="progress-bar"></div>
+        </div>
+
+        <!-- Search Section -->
+        <section class="content">
+          <div class="search-bar">
+            <div class="autocomplete-wrapper">
+              <input
+                type="text"
+                id="skillsInput"
+                placeholder="Enter skills (comma separated)..."
+                autocomplete="off"
+                oninput="handleSkillInput(this.value)"
+                onkeydown="handleSkillKeydown(event)"
+              />
+              <div class="autocomplete-list" id="skills-autocomplete"></div>
+              <input
+              type="number"
+              id="topN"
+              min="1"
+              max="20"
+              value="10"
+              class="topn-input"
+              title="Number of jobs to show"
+              />
+              <button type="button" class="btn" onclick="searchJobs()">
+                Search
+              </button>
+            </div>
+          </div>
+
+          <div id="results" class="results-container"></div>
+        </section>
+      </div>
+
+      <div id="custom-alert" class="custom-alert hidden">
+        <span id="alert-text"></span>
+      </div>
+
+      <!-- Footer -->
+      <footer>
+        <p class="footer-logo">CareerPath AI</p>
+        <p id="year-text">©2026</p>
+        <div class="socials">
+          <a href="#">💼</a>
+          <a href="#">🔗</a>
+          <a href="#">✉️</a>
+        </div>
+      </footer>
+
+      <!-- JavaScript -->
+      <script>
+        // ── Progress Bar ──
+        function startProgress() {
+          const bar = document.getElementById("progress-bar");
+          bar.style.width = "0%";
+          setTimeout(() => (bar.style.width = "70%"), 50);
+        }
+
+        function finishProgress() {
+          const bar = document.getElementById("progress-bar");
+          bar.style.width = "100%";
+          setTimeout(() => (bar.style.width = "0%"), 400);
+        }
+
+        // ── Autocomplete for Skills ──
+        let skillSuggestions = [];
+        let activeIndex = -1;
+
+        function handleSkillInput(value) {
+          // Get the last skill being typed (after last comma)
+          const parts = value.split(",");
+          const lastPart = parts[parts.length - 1].trim();
+
+          if (lastPart.length < 1) {
+            closeAutocomplete();
+            return;
+          }
+
+          fetch(`/autocomplete-skills?q=${encodeURIComponent(lastPart)}`)
+            .then((res) => res.json())
+            .then((suggestions) => {
+              skillSuggestions = suggestions;
+              activeIndex = -1;
+              renderAutocomplete(
+                "skills-autocomplete",
+                suggestions,
+                lastPart,
+                (selected) => {
+                  // Replace last typed part with selected suggestion
+                  parts[parts.length - 1] = " " + selected;
+                  document.getElementById("skillsInput").value =
+                    parts.join(",") + ", ";
+                  closeAutocomplete();
+                },
+              );
+            });
+        }
+
+        function handleSkillKeydown(event) {
+          const list = document.getElementById("skills-autocomplete");
+          const items = list.querySelectorAll(".autocomplete-item");
+
+          if (event.key === "ArrowDown") {
+            activeIndex = Math.min(activeIndex + 1, items.length - 1);
+            updateActiveItem(items);
+          } else if (event.key === "ArrowUp") {
+            activeIndex = Math.max(activeIndex - 1, -1);
+            updateActiveItem(items);
+          } else if (event.key === "Enter" && activeIndex >= 0) {
+            event.preventDefault();
+            items[activeIndex].click();
+          } else if (event.key === "Escape") {
+            closeAutocomplete();
+          }
+        }
+
+        // ── Autocomplete Renderer ──
+        function renderAutocomplete(listId, suggestions, query, onSelect) {
+          const list = document.getElementById(listId);
+          list.innerHTML = "";
+
+          if (suggestions.length === 0) {
+            list.classList.remove("show");
+            return;
+          }
+
+          suggestions.forEach((item, index) => {
+            const div = document.createElement("div");
+            div.className = "autocomplete-item";
+
+            // Highlight matching part
+            const regex = new RegExp(`(${query})`, "gi");
+            div.innerHTML = item.replace(
+              regex,
+              '<span class="highlight">$1</span>',
+            );
+
+            div.addEventListener("click", () => onSelect(item));
+            list.appendChild(div);
+          });
+
+          list.classList.add("show");
+        }
+
+        function updateActiveItem(items) {
+          items.forEach((item, i) => {
+            item.classList.toggle("active", i === activeIndex);
+          });
+        }
+
+        function closeAutocomplete() {
+          document.querySelectorAll(".autocomplete-list").forEach((l) => {
+            l.classList.remove("show");
+            l.innerHTML = "";
+          });
+          activeIndex = -1;
+        }
+
+        // Close autocomplete when clicking outside
+        document.addEventListener("click", (e) => {
+          if (!e.target.closest(".autocomplete-wrapper")) {
+            closeAutocomplete();
+          }
+        });
+
+        // ── Search Jobs ──
+        async function searchJobs() {
+          const skillsInput = document.getElementById("skillsInput").value;
+          const topN = parseInt(document.getElementById("topN").value) || 5;
+
+          if (!skillsInput.trim()) {
+            showAlert("Please enter at least one skill!");
+            return;
+          }
+
+          closeAutocomplete();
+          startProgress();
+
+          const formattedUserSkills = skillsInput
+            .split(",")
+            .map((skill) => skill.trim())
+            .filter((skill) => skill)
+            .map(
+              (skill) =>
+                skill.charAt(0).toUpperCase() + skill.slice(1).toLowerCase(),
+            )
+            .join(", ");
+
+          const response = await fetch("/recommend_jobs", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ skills: skillsInput }),
+          });
+
+          const data = await response.json();
+          finishProgress();
+
+          const resultsDiv = document.getElementById("results");
+          resultsDiv.innerHTML = "";
+
+          function renderMissingSkills(skillsString) {
+            if (!skillsString || skillsString === "None") {
+              return '<span style="color:green;">None 🎉</span>';
+            }
+            const skills = skillsString.split(",").map((s) => s.trim());
+            return skills
+              .map(
+                (skill) => `
+        <span class="skill-tag">
+          ${skill}
+          <button class="add-btn" data-skill="${skill.replace(/"/g, '&quot;')}" onclick="addToTodo(this)">+</button>
+        </span>
+      `,
+              )
+              .join("");
+          }
+
+          if (data.length === 0) {
+            resultsDiv.innerHTML =
+              "<p class='no-results'>❌ No matching jobs found.</p>";
+          } else {
+            data.slice(0, topN).forEach((job, index) => {
+              const matchColor =
+                job["Match_%"] >= 80
+                  ? "green"
+                  : job["Match_%"] >= 50
+                    ? "orange"
+                    : "red";
+
+              resultsDiv.innerHTML += `
+          <div class="job-card">
+            <div class="job-header">
+              <span class="job-number">#${index + 1}</span>
+              <div class="job-header-main">
+                <h3 class="job-title">${job["Job Title"]}</h3>
+                <button class="toggle-btn" onclick="toggleDetails(this)">Show Details</button>
+              </div>
+              <span class="match-percent" style="background-color:${matchColor}">${job["Match_%"]}%</span>
+            </div>
+            <div class="job-details" style="display:none;">
+              <p class='job-details-block'><h4 class='job-outline'>📄 Description:</h4>${job["Job Description"] || "N/A"}</p>
+              <p class='job-details-block'><h4 class='job-outline'>🧠 Required Skills:</h4> ${job["Skills"]}</p>
+              <p class='job-details-block'><h4 class='job-outline'>🧠 Your Skills:</h4> ${formattedUserSkills}</p>
+              <p class='job-details-block'><h4 class='job-outline'>❌ Missing Skills:</h4></p>
+              <div class="skill-tags">${renderMissingSkills(job["Missing_Skills"])}</div>
+              <p class='job-details-block'><h4 class='job-outline'>📜 Certifications:</h4> ${job["Certifications"] || "N/A"}</p>
+              <button class="job-add" data-job="${job["Job Title"].replace(/'/g, "&apos;").replace(/"/g, '&quot;')}" onclick="addTargetJob(this)">
+                ⭐ Add to Target Jobs
+              </button>
+            </div>
+          </div>
+        `;
+            });
+          }
+        }
+
+        function toggleDetails(button) {
+          const jobCard = button.closest(".job-card");
+          const details = jobCard.querySelector(".job-details");
+          if (details.style.display === "none") {
+            details.style.display = "block";
+            button.textContent = "Hide Details";
+          } else {
+            details.style.display = "none";
+            button.textContent = "Show Details";
+          }
+        }
+
+        function addToTodo(button) {
+          const skill = button.dataset.skill;
+          button.disabled = true;
+          button.textContent = "✓";
+          fetch("/add-to-todo", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ skill }),
+          })
+            .then((res) => res.json())
+            .then(() => showAlert(`"${skill}" added to your To-Do`))
+            .catch(() => {
+              button.disabled = false;
+              button.textContent = "+";
+              showAlert("Failed to add skill");
+            });
+        }
+
+        function addTargetJob(button) {
+          const jobTitle = button.dataset.job;
+          button.disabled = true;
+          button.textContent = "✓ Added";
+          fetch("/add-target-job", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ job_title: jobTitle }),
+          })
+            .then((res) => res.json())
+            .then(() => showAlert(`"${jobTitle}" added to Target Jobs!`))
+            .catch(() => {
+              button.disabled = false;
+              button.textContent = "⭐ Add to Target Jobs";
+              showAlert("Failed to add job!");
+            });
+        }
+
+        function showAlert(message, duration = 2000) {
+          const alertBox = document.getElementById("custom-alert");
+          const alertText = document.getElementById("alert-text");
+          alertText.textContent = message;
+          alertBox.classList.remove("hidden");
+          setTimeout(() => alertBox.classList.add("hidden"), duration);
+        }
+      </script>
+    </div>
+  </body>
+</html>

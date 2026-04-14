@@ -1,0 +1,345 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Dashboard | CareerPath AI</title>
+    <link
+      rel="stylesheet"
+      href="{{ url_for('static', filename='css/styles.css') }}"
+    />
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+  </head>
+
+  <body>
+    <div class="page-wrapper">
+      <!-- Navbar -->
+      <nav class="navbar">
+        <h1 class="logo">CareerPath AI</h1>
+        <ul class="nav-links">
+          <li>
+            <a
+              href="{{ url_for('index') }}"
+              class="{{ 'active' if request.endpoint == 'index' else '' }}"
+              >Home</a
+            >
+          </li>
+          <li>
+            <a
+              href="{{ url_for('jobs') }}"
+              class="{{ 'active' if request.endpoint == 'jobs' else '' }}"
+              >Find Skills</a
+            >
+          </li>
+          <li>
+            <a
+              href="{{ url_for('skills') }}"
+              class="{{ 'active' if request.endpoint == 'skills' else '' }}"
+              >Find Jobs</a
+            >
+          </li>
+          <li>
+            <a
+              href="{{ url_for('about') }}"
+              class="{{ 'active' if request.endpoint == 'about' else '' }}"
+              >About</a
+            >
+          </li>
+        </ul>
+        <div class="nav-buttons">
+          <a href="{{ url_for('dashboard') }}" class="sign-btn active">Dashboard</a>
+          <div class="auth-buttons">
+            <a href="{{ url_for('logout') }}" class="sign-btn">Logout</a>
+          </div>
+        </div>
+      </nav>
+
+      <div class="main-content">
+        <!-- Header -->
+        <section class="page-header">
+          <p>Welcome, {{ current_user.username }}!</p>
+          <h2>Your Career Progress Dashboard</h2>
+          <p>Track skill growth, job readiness, and gaps in one place.</p>
+        </section>
+
+        <!-- Stats Row -->
+        <section class="stats-grid">
+          <div class="stat-card">
+            <h3>Total Skills</h3>
+            <p id="stat-total">{{ total_skills }}</p>
+          </div>
+          <div class="stat-card">
+            <h3>Completed</h3>
+            <p id="stat-completed">{{ skills_acquired }}</p>
+          </div>
+          <div class="stat-card">
+            <h3>Pending</h3>
+            <p id="stat-pending">{{ missing_skills }}</p>
+          </div>
+          <div class="stat-card">
+            <h3>Target Jobs</h3>
+            <p id="stat-jobs">{{ total_jobs }}</p>
+          </div>
+          <div class="stat-card">
+            <h3>Readiness</h3>
+            <p id="stat-percent">
+              {% if total_skills > 0 %} {{ ((skills_acquired / total_skills) *
+              100) | round(1) }}% {% else %} 0% {% endif %}
+            </p>
+          </div>
+        </section>
+
+        <!-- Main Dashboard: Left + Right -->
+        <section class="dashboard-main">
+          <!-- LEFT SIDE -->
+          <div class="dashboard-left">
+            <!-- Target Jobs -->
+            <div class="dash-card">
+              <div class="dash-card-header">
+                <h3>🎯 Target Jobs</h3>
+              </div>
+              {% if target_jobs %}
+              <ul class="dash-list" id="target-jobs-list">
+                {% for job in target_jobs %}
+                <li class="dash-list-item" id="job-{{ loop.index }}">
+                  <span class="dash-item-text">{{ job }}</span>
+                  <button
+                    class="remove-btn"
+                    data-job="{{ job | e }}"
+                    onclick="removeTargetJob(this)"
+                  >
+                    ✕
+                  </button>
+                </li>
+                {% endfor %}
+              </ul>
+              {% else %}
+              <p class="empty-msg" id="no-jobs-msg">
+                No target jobs added yet. Go to
+                <a href="{{ url_for('skills') }}">Find Jobs</a> to add some!
+              </p>
+              {% endif %}
+            </div>
+            <!-- To Do List -->
+            <div class="dash-card">
+              <div class="dash-card-header">
+                <h3>📌 Skills To Learn</h3>
+                <span class="badge" id="pending-badge">{{ missing_skills }} pending</span>
+              </div>
+            
+              <ul class="dash-list" id="pending-list">
+                {% for item in todo %}
+                <li class="dash-list-item" data-skill="{{ item.skill | e }}">
+                  <input
+                    type="checkbox"
+                    class="skill-checkbox"
+                    onchange="toggleSkill(this)"
+                    title="Mark as complete"
+                  />
+                  <span class="dash-item-text">{{ item.skill }}</span>
+                  {% if item.jobs %}
+                  <small class="job-chip"> {{ item.jobs | join(', ') }} </small>
+                  {% endif %}
+                  <button
+                    class="remove-btn"
+                    onclick="removeSkill(this)"
+                  >
+                    ✕
+                  </button>
+                </li>
+                {% endfor %}
+              </ul>
+              <ul class="dash-list" id="completed-list">
+                {% for item in completed %}
+                <li class="dash-list-item completed-item" data-skill="{{ item.skill | e }}">
+                  <input
+                    type="checkbox"
+                    class="skill-checkbox"
+                    checked
+                    onchange="toggleSkill(this)"
+                    title="Mark as incomplete"
+                  />
+                  <span class="dash-item-text done-text">{{ item.skill }}</span>
+                  {% if item.jobs %}
+                  <small class="job-chip"> {{ item.jobs | join(', ') }}</small>
+                  {% endif %}
+                  <button
+                    class="remove-btn"
+                    onclick="removeSkill(this)"
+                  >
+                    ✕
+                  </button>
+                </li>
+                {% endfor %}
+              </ul>
+            
+              <p class="empty-msg {% if todo or completed %}hidden{% endif %}" id="empty-msg">
+                No skills added yet. Go to
+                <a href="{{ url_for('skills') }}">Find Jobs</a> or
+                <a href="{{ url_for('jobs') }}">Find Skills</a> to add missing
+                skills!
+              </p>
+            </div>
+          </div>
+          <!-- RIGHT SIDE: Charts -->
+          <div class="dashboard-right">
+          
+            <!-- PIE CHART -->
+            <div class="dash-card chart-card">
+              <h3>🧠 Skill Completion</h3>
+              {% if pie_chart %}
+                {{ pie_chart | safe }}
+              {% else %}
+                <p class="empty-msg">Add skills to see progress.</p>
+              {% endif %}
+            </div>
+          
+            <!-- JOB MATCH BAR -->
+            <div class="dash-card chart-card">
+              <h3>📊 Job Match Progress</h3>
+              {% if match_chart %}
+                {{ match_chart | safe }}
+              {% else %}
+                <p class="empty-msg">Add target jobs to see match.</p>
+              {% endif %}
+            </div>
+          
+            
+            <!-- Target Jobs Chart -->
+            {% if hbar_chart %}
+            <section class="dash-card" style="margin: 0 20px 20px 20px;">
+              <h3>📈 Skill Progress per Job</h3>
+              {{ hbar_chart | safe }}
+            </section>
+            {% endif %}    
+          </div>
+        </section>
+        
+        <!-- Custom Alert -->
+      <div id="custom-alert" class="custom-alert hidden">
+        <span id="alert-text"></span>
+      </div>
+
+      <!-- Footer -->
+      <footer>
+        <p class="footer-logo">CareerPath AI</p>
+        <p id="year-text">©2026</p>
+        <div class="socials">
+          <a href="#">💼</a>
+          <a href="#">🔗</a>
+          <a href="#">✉️</a>
+        </div>
+      </footer>
+    </div>
+
+    <script>
+      // ── Toggle Skill Complete/Incomplete ──
+      function toggleSkill(checkbox) {
+        const li = checkbox.closest('li');
+        const skill = li.dataset.skill;
+        const route = checkbox.checked ? "/mark-complete" : "/mark-incomplete";
+
+        fetch(route, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ skill }),
+        })
+          .then((res) => res.json())
+          .then((data) => {
+            if (data.status === "success") {
+              if (checkbox.checked) {
+                // Move to completed
+                const completedList = document.getElementById('completed-list');
+                li.classList.add('completed-item');
+                checkbox.title = "Mark as incomplete";
+                const span = li.querySelector('.dash-item-text');
+                span.classList.add('done-text');
+                completedList.appendChild(li);
+              } else {
+                // Move to pending
+                const pendingList = document.getElementById('pending-list');
+                li.classList.remove('completed-item');
+                checkbox.title = "Mark as complete";
+                const span = li.querySelector('.dash-item-text');
+                span.classList.remove('done-text');
+                pendingList.appendChild(li);
+              }
+              showAlert(`✅ "${skill}" updated`);
+              setTimeout(() => window.location.reload(), 300);
+            } else {
+              showAlert("Failed to update skill status");
+              // Revert checkbox
+              checkbox.checked = !checkbox.checked;
+            }
+          })
+          .catch((err) => {
+            console.error(err);
+            showAlert("Error updating skill status");
+            // Revert checkbox
+            checkbox.checked = !checkbox.checked;
+          });
+      }
+
+      // ── Remove Skill ──
+      function removeSkill(button) {
+        const li = button.closest('li');
+        const skill = li.dataset.skill;
+
+        fetch("/remove-skill", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ skill }),
+        })
+          .then((res) => res.json())
+          .then((data) => {
+            if (data.status === "success") {
+              li.remove();
+              showAlert(`🗑️ "${skill}" removed`);
+              setTimeout(() => window.location.reload(), 300);
+            } else {
+              showAlert("Failed to remove skill");
+            }
+          })
+          .catch((err) => {
+            console.error(err);
+            showAlert("Error removing skill");
+          });
+      }
+
+      // ── Remove Target Job ──
+      function removeTargetJob(button) {
+        const li = button.closest('li');
+        const job = button.dataset.job;
+
+        fetch("/remove-target-job", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ job_title: job }),
+        })
+          .then((res) => res.json())
+          .then((data) => {
+            if (data.status === "success") {
+              li.remove();
+              showAlert(`🗑️ "${job}" removed from target jobs`);
+              setTimeout(() => window.location.reload(), 300);
+            } else {
+              showAlert("Failed to remove target job");
+            }
+          })
+          .catch((err) => {
+            console.error(err);
+            showAlert("Error removing target job");
+          });
+      }
+      // ── Custom Alert ──
+      function showAlert(message, duration = 2500) {
+        const alertBox = document.getElementById("custom-alert");
+        const alertText = document.getElementById("alert-text");
+        alertText.textContent = message;
+        alertBox.classList.remove("hidden");
+        setTimeout(() => alertBox.classList.add("hidden"), duration);
+      }
+
+    </script>
+  </body>
+</html>
