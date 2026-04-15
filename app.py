@@ -28,7 +28,6 @@ if db_url and db_url.startswith("postgres://"):
 sqlite_db_path = os.path.join(app.root_path, 'matchcareer.db')
 app.config['SQLALCHEMY_DATABASE_URI'] = db_url or f'sqlite:///{sqlite_db_path}'
 
-# Use SQLite by default for Render deployment, or honor DATABASE_URL if provided.
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL', f'sqlite:///{sqlite_db_path}')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
@@ -388,7 +387,7 @@ def dashboard():
         hbar_chart=hbar_chart,
         match_chart=match_chart,
 
-        # REQUIRED FOR STATS ROW ✅
+        # STATS ROW 
         total_skills=total_skills,
         skills_acquired=skills_acquired,
         missing_skills=missing_skills,
