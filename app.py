@@ -28,7 +28,6 @@ if db_url and db_url.startswith("postgres://"):
 sqlite_db_path = os.path.join(app.root_path, 'matchcareer.db')
 app.config['SQLALCHEMY_DATABASE_URI'] = db_url or f'sqlite:///{sqlite_db_path}'
 
-app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL', f'sqlite:///{sqlite_db_path}')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 # Initialize extensions
